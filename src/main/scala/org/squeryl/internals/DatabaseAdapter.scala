@@ -463,6 +463,12 @@ trait DatabaseAdapter {
     ).mkString("(",",",")"));
   }
 
+  protected [squeryl] def writeInsertIgnoringConflict[T](
+    o: T,
+    t: Table[T],
+    sw: StatementWriter
+  ): Unit = ???
+
   protected [squeryl] def writeReturningClause[T](t: Table[T], sw: StatementWriter) {
     if (supportsReturningClause) {
       val f = t.posoMetaData.refreshableFields.toList

@@ -39,11 +39,25 @@ class Table[T: TypeTag] private [squeryl] (n: String, c: Class[T], val schema: S
    * does not result in 1 row
    */
   def insert(t: T): T = StackMarker.lastSquerylStackFrame {
+    insert(t, _dbAdapter.writeInsert, ignoreConflict = false)
+  }
 
+  /**
+   * @throws SquerylSQLException When a database error occurs or the insert
+   * does not result in 0 or 1 rows
+   */
+  def insertIgnoringConflict(t: T): T =
+    insert(t, _dbAdapter.writeInsertIgnoringConflict, ignoreConflict = true)
+
+  private def insert(
+    t: T,
+    writeInsert: (T, Table[T], StatementWriter) => Unit,
+    ignoreConflict: Boolean
+  ): T = {
     val o = _callbacks.beforeInsert(t.asInstanceOf[AnyRef])
     val sess = Session.currentSession
     val sw = new StatementWriter(_dbAdapter)
-    _dbAdapter.writeInsert(o.asInstanceOf[T], this, sw)
+    writeInsert(o.asInstanceOf[T], this, sw)
     _dbAdapter.writeReturningClause(this, sw)
 
     val st =
@@ -83,9 +97,12 @@ class Table[T: TypeTag] private [squeryl] (n: String, c: Class[T], val schema: S
 
       val cnt = st.getUpdateCount
 
-      //if (cnt != 1)
-      if (cnt != 1 && ! hasRefreshableFields) // HACK Work around PG JDBC bug
-        throw SquerylSQLException("failed to insert.  Expected 1 row, got " + cnt)
+      if (!hasRefreshableFields) { // HACK Work around PG JDBC bug
+        if (cnt != 1 && !ignoreConflict)
+          throw SquerylSQLException("failed to insert.  Expected 1 row, got " + cnt)
+        else if (cnt != 1 && cnt != 0)
+          throw SquerylSQLException("failed to insert.  Expected 0 or 1 rows, got " + cnt)
+      }
 
       posoMetaData.primaryKey match {
         case Some(Left(pk:FieldMetaData)) => if(pk.isAutoIncremented) {

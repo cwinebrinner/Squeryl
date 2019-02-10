@@ -113,6 +113,15 @@ class PostgreSqlAdapter extends DatabaseAdapter {
     sw.write(colVals.mkString("(",",",")"));
   }
 
+  override protected [squeryl] def writeInsertIgnoringConflict[T](
+    o: T,
+    t: Table[T],
+    sw: StatementWriter
+  ): Unit = {
+    writeInsert(o, t, sw)
+    sw.write(" on conflict do nothing")
+  }
+
   /**
    * In the case custom DB type used it is benefitial to explicitly cast value to its type, because it invokes
    * proper cast function. For example, it is possible to insert Scala String into a DB ENUM using dbType.
